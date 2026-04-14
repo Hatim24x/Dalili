@@ -1,0 +1,6 @@
+{
+  "name": "Qareeb",
+  "description": "A map-based application to find nearby shops, view details, and communicate with owners. Supports Arabic and English.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["Multilingual (Arabic/English)", "Real-time Chat", "Map Integration", "Geolocation Notifications", "Shop Management"]
+}
