@@ -90,12 +90,7 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      // Use hardcoded admin for bootstrap, or check user doc for role
-      // Note: get() can be expensive on list queries, but for single doc it's okay
-      return isSignedIn() && (
-        request.auth.token.email == "hatim14995@gmail.com" && 
-        request.auth.token.email_verified == true
-      );
+      return isSignedIn() && request.auth.token.email == "hatim14995@gmail.com";
     }
 
     // ===============================================================
@@ -129,11 +124,12 @@ service cloud.firestore {
     }
 
     function isValidChat(data) {
-      return data.participants is list && data.participants.size() == 2 &&
-             (request.auth.uid == data.participants[0] || request.auth.uid == data.participants[1]) &&
-             data.shopId is string && data.shopId.size() <= 128 &&
-             (!('initiatorName' in data) || (data.initiatorName is string && data.initiatorName.size() <= 100)) &&
-             (!('updatedAt' in data) || data.updatedAt is timestamp || data.updatedAt == request.time);
+      return data.participants is list && 
+             data.participants.size() == 2 &&
+             (request.auth.uid in data.participants) &&
+             data.shopId is string && 
+             data.shopId.size() <= 128 &&
+             (!('initiatorName' in data) || (data.initiatorName is string && data.initiatorName.size() <= 100));
     }
 
     function isValidMessage(data) {
@@ -193,28 +189,20 @@ service cloud.firestore {
     match /chats/{chatId} {
       allow read: if isSignedIn() && (
         isAdmin() || 
-        (resource != null && request.auth.uid in resource.data.participants)
+        request.auth.uid in resource.data.participants
       );
       
       allow create: if isSignedIn() && isValidChat(incoming());
       
       allow update: if isSignedIn() && (request.auth.uid in resource.data.participants) &&
-                    (
-                      // Action: Update last message and timestamp
-                      (incoming().diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'updatedAt']))
-                    );
+                    (incoming().diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'updatedAt']));
       
       // ===============================================================
       // 5. Messages Subcollection
       // ===============================================================
       match /messages/{messageId} {
-        allow read: if isSignedIn() && (
-          isAdmin() ||
-          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
-        );
-        
-        allow create: if isSignedIn() && isValidMessage(incoming()) && 
-                      request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow read: if isSignedIn() && (isAdmin() || request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+        allow create: if isSignedIn() && isValidMessage(incoming()) && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
       }
     }
   }

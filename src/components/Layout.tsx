@@ -73,6 +73,15 @@ export default function Layout({ children }: LayoutProps) {
                 >
                   {t('favorites')}
                 </Link>
+                <Link 
+                  to="/chat" 
+                  className={cn(
+                    "text-sm font-medium transition-colors hover:text-primary-600",
+                    location.pathname === '/chat' ? "text-primary-600" : "text-neutral-500"
+                  )}
+                >
+                  {t('chat')}
+                </Link>
               </div>
             </div>
 

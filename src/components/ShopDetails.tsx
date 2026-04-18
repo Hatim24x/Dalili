@@ -189,7 +189,7 @@ export default function ShopDetails({
               <div className="mt-8 flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <button
                   onClick={handleChatClick}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-primary-600 py-4 font-bold text-white transition-all hover:bg-primary-700 active:scale-[0.98]"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-primary-600 py-4 font-bold text-white transition-all hover:bg-primary-700 hover:shadow-lg hover:shadow-primary-600/20 active:scale-[0.98] ring-1 ring-primary-500/50"
                 >
                   <MessageSquare className="h-5 w-5" />
                   {t('chat')}

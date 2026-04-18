@@ -70,6 +70,7 @@
         "id": { "type": "string" },
         "participants": { "type": "array", "items": { "type": "string" } },
         "shopId": { "type": "string" },
+        "initiatorName": { "type": "string" },
         "lastMessage": { "type": "string" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },

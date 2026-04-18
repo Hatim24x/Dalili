@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/src/lib/utils';
 import { Shop, Review } from '@/src/types';
 import { shopService } from '@/src/services/shopService';
-import { mockChatService } from '@/src/services/chatService';
+import { chatService } from '@/src/services/chatService';
 import { authService } from '@/src/services/authService';
 import ShopForm from '@/src/components/ShopForm';
 import { useAuth } from '@/src/context/AuthContext';
@@ -36,8 +36,8 @@ export default function OwnerDashboard() {
           const shopReviews = await shopService.getShopReviews(myShop.id);
           setReviews(shopReviews);
           
-          const chats = await mockChatService.getChats(currentUser.uid);
-          setChatCount(chats.length);
+          const chatData = await chatService.getChats(currentUser.uid);
+          setChatCount(chatData.length);
         }
       } catch (error) {
         console.error('Error fetching shop:', error);
