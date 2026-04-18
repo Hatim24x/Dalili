@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import ChatWindow from '@/src/components/ChatWindow';
 import { Message, UserProfile, Shop } from '@/src/types';
-import { mockChatService } from '@/src/services/chatService';
+import { chatService } from '@/src/services/chatService';
 
 interface ChatContainerProps {
   shop: Shop | null;
@@ -16,43 +16,23 @@ export default function ChatContainer({ shop, chatId, currentUser, onClose, reci
   const [messages, setMessages] = useState<Message[]>([]);
 
   useEffect(() => {
-    let isMounted = true;
-    let interval: NodeJS.Timeout;
-
-    if (chatId) {
-      const fetchMessages = async () => {
-        try {
-          const newMessages = await mockChatService.getMessages(chatId);
-          if (isMounted) {
-            // Only update state if messages have actually changed to avoid unnecessary re-renders
-            setMessages(prev => {
-              if (JSON.stringify(prev) !== JSON.stringify(newMessages)) {
-                return newMessages;
-              }
-              return prev;
-            });
-          }
-        } catch (error) {
-          console.error('Failed to fetch messages:', error);
-        }
-      };
-
-      fetchMessages();
-      
-      interval = setInterval(fetchMessages, 3000);
+    if (!chatId) {
+      setMessages([]);
+      return;
     }
 
-    return () => {
-      isMounted = false;
-      if (interval) clearInterval(interval);
-    };
+    const unsubscribe = chatService.onMessagesChange(chatId, (newMessages) => {
+      setMessages(newMessages);
+    });
+
+    return () => unsubscribe();
   }, [chatId]);
 
   const handleSendMessage = async (text: string) => {
     if (!currentUser || !chatId) return;
     try {
-      const newMessage = await mockChatService.sendMessage(chatId, currentUser.uid, text);
-      setMessages(prev => [...prev, newMessage]);
+      await chatService.sendMessage(chatId, currentUser.uid, text);
+      // No need to manually update state, onMessagesChange will pick it up
     } catch (error) {
       console.error('Failed to send message:', error);
     }

@@ -8,9 +8,10 @@ interface ShopListProps {
   favorites: string[];
   onToggleFavorite: (id: string) => void;
   onShopClick: (shop: Shop) => void;
+  userLocation?: { lat: number, lng: number } | null;
 }
 
-export default function ShopList({ shops, favorites, onToggleFavorite, onShopClick }: ShopListProps) {
+export default function ShopList({ shops, favorites, onToggleFavorite, onShopClick, userLocation }: ShopListProps) {
   const { t } = useTranslation();
 
   if (shops.length === 0) {
@@ -22,7 +23,7 @@ export default function ShopList({ shops, favorites, onToggleFavorite, onShopCli
   }
 
   return (
-    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {shops.map((shop) => (
         <ShopCard
           key={shop.id}
@@ -30,6 +31,7 @@ export default function ShopList({ shops, favorites, onToggleFavorite, onShopCli
           isFavorite={favorites.includes(shop.id)}
           onToggleFavorite={onToggleFavorite}
           onClick={onShopClick}
+          userLocation={userLocation}
         />
       ))}
     </div>

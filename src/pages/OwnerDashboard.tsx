@@ -4,10 +4,11 @@ import { Store, Clock, Settings, MessageSquare, BarChart3, Power, Star, Edit3, X
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/src/lib/utils';
 import { Shop, Review } from '@/src/types';
-import { mockShopService } from '@/src/services/shopService';
+import { shopService } from '@/src/services/shopService';
 import { mockChatService } from '@/src/services/chatService';
 import { authService } from '@/src/services/authService';
 import ShopForm from '@/src/components/ShopForm';
+import { useAuth } from '@/src/context/AuthContext';
 import { toast } from 'sonner';
 
 import { useNavigate } from 'react-router-dom';
@@ -15,35 +16,45 @@ import { useNavigate } from 'react-router-dom';
 export default function OwnerDashboard() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { user: currentUser, loading: authLoading } = useAuth();
   const [shop, setShop] = useState<Shop | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [chatCount, setChatCount] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
-
-  const currentUser = React.useMemo(() => authService.getCurrentUser(), []);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchShop = async () => {
       if (!currentUser) return;
-
-      const shops = await mockShopService.getNearbyShops(0, 0);
-      const myShop = shops.find(s => s.ownerId === currentUser.uid);
-      setShop(myShop || null);
-      if (myShop) {
-        const shopReviews = await mockShopService.getShopReviews(myShop.id);
-        setReviews(shopReviews);
-        
-        const chats = await mockChatService.getChats(currentUser.uid);
-        setChatCount(chats.length);
+      
+      setIsLoading(true);
+      try {
+        const shops = await shopService.getNearbyShops(0, 0);
+        const myShop = shops.find(s => s.ownerId === currentUser.uid);
+        setShop(myShop || null);
+        if (myShop) {
+          const shopReviews = await shopService.getShopReviews(myShop.id);
+          setReviews(shopReviews);
+          
+          const chats = await mockChatService.getChats(currentUser.uid);
+          setChatCount(chats.length);
+        }
+      } catch (error) {
+        console.error('Error fetching shop:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
-    fetchShop();
-  }, [currentUser?.uid]);
+
+    if (!authLoading) {
+      fetchShop();
+    }
+  }, [currentUser?.uid, authLoading]);
 
   const toggleStatus = async () => {
     if (!shop) return;
     const newStatus = !shop.isOpen;
-    await mockShopService.toggleShopStatus(shop.id, newStatus);
+    await shopService.updateShop(shop.id, { isOpen: newStatus });
     setShop(prev => prev ? { ...prev, isOpen: newStatus } : null);
     toast.success(newStatus ? 'Shop is now Open' : 'Shop is now Closed');
   };
@@ -51,8 +62,8 @@ export default function OwnerDashboard() {
   const handleUpdateShop = async (data: Partial<Shop>) => {
     if (!shop) return;
     try {
-      const updatedShop = await mockShopService.updateShop(shop.id, data);
-      setShop(updatedShop);
+      await shopService.updateShop(shop.id, data);
+      setShop(prev => prev ? { ...prev, ...data } : null);
       setIsEditing(false);
       toast.success('Shop updated successfully!');
     } catch (error) {
@@ -60,6 +71,14 @@ export default function OwnerDashboard() {
       toast.error(message);
     }
   };
+
+  if (authLoading || isLoading) {
+    return (
+      <div className="flex h-[60vh] flex-col items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-600 border-t-transparent" />
+      </div>
+    );
+  }
 
   if (!shop) return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -133,7 +152,7 @@ export default function OwnerDashboard() {
             </div>
             <div>
               <p className="text-sm text-neutral-500">Total Views</p>
-              <p className="text-2xl font-bold">1,284</p>
+              <p className="text-2xl font-bold">{shop.viewsCount || 0}</p>
             </div>
           </div>
         </div>
@@ -158,7 +177,9 @@ export default function OwnerDashboard() {
             </div>
             <div>
               <p className="text-sm text-neutral-500">Active Hours</p>
-              <p className="text-2xl font-bold">08:00 - 22:00</p>
+              <p className="text-2xl font-bold">
+                {shop.businessHours?.open || '08:00'} - {shop.businessHours?.close || '22:00'}
+              </p>
             </div>
           </div>
         </div>

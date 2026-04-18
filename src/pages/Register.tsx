@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/src/lib/utils';
 import { UserRole } from '@/src/types';
-import { mockShopService } from '@/src/services/shopService';
+import { shopService } from '@/src/services/shopService';
 import { authService } from '@/src/services/authService';
 import { toast } from 'sonner';
 import LocationPicker from '@/src/components/LocationPicker';
@@ -22,7 +22,7 @@ export default function Register() {
   const [shopName, setShopName] = useState('');
   const [shopDescription, setShopDescription] = useState('');
   const [shopAddress, setShopAddress] = useState('');
-  const [shopLocation, setShopLocation] = useState<{ lat: number, lng: number }>({ lat: 24.7136, lng: 46.6753 });
+  const [shopLocation, setShopLocation] = useState<{ lat: number, lng: number }>({ lat: 31.8491, lng: 47.1456 });
   const [shopImages, setShopImages] = useState<string[]>([]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,11 +42,11 @@ export default function Register() {
     e.preventDefault();
     
     try {
-      const user = await authService.register({ email, name, role });
+      const user = await authService.loginWithGoogle(role);
       
       if (role === 'owner') {
         try {
-          await mockShopService.addShop({
+          await shopService.addShop({
             name: shopName,
             description: shopDescription,
             location: { ...shopLocation, address: shopAddress },
@@ -63,8 +63,14 @@ export default function Register() {
         toast.success('Account created successfully!');
         navigate('/');
       }
-    } catch (error) {
-      toast.error('Registration failed. Please try again.');
+    } catch (error: any) {
+      if (error.code === 'auth/popup-closed-by-user') {
+        toast.info('Registration cancelled. Please keep the window open to sign in.');
+      } else if (error.code === 'auth/popup-blocked') {
+        toast.error('Registration popup was blocked. Please allow popups for this site.');
+      } else {
+        toast.error('Registration failed. Please try again.');
+      }
     }
   };
 
@@ -81,6 +87,10 @@ export default function Register() {
         </div>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
+          <div className="text-sm text-neutral-500 bg-neutral-50 p-4 rounded-xl border border-neutral-100">
+            We'll use your Google account to create your profile. Please choose your role below:
+          </div>
+          
           {/* Role Selection */}
           <div className="grid grid-cols-2 gap-4">
             <button
@@ -112,40 +122,6 @@ export default function Register() {
           </div>
 
           <div className="space-y-4">
-            <div className="relative">
-              <User className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-neutral-400" />
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Full Name"
-                className="w-full rounded-2xl border border-neutral-200 bg-neutral-50 py-4 pl-12 pr-4 text-sm focus:border-primary-500 focus:outline-none"
-              />
-            </div>
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-neutral-400" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email Address"
-                className="w-full rounded-2xl border border-neutral-200 bg-neutral-50 py-4 pl-12 pr-4 text-sm focus:border-primary-500 focus:outline-none"
-              />
-            </div>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-neutral-400" />
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                className="w-full rounded-2xl border border-neutral-200 bg-neutral-50 py-4 pl-12 pr-4 text-sm focus:border-primary-500 focus:outline-none"
-              />
-            </div>
-
             <AnimatePresence>
               {role === 'owner' && (
                 <motion.div

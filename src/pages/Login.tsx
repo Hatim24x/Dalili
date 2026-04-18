@@ -9,21 +9,30 @@ import { toast } from 'sonner';
 export default function Login() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleGoogleLogin = async () => {
+    setIsLoading(true);
     try {
-      const user = await authService.login(email);
+      const user = await authService.loginWithGoogle();
       toast.success('Logged in successfully!');
-      if (user.role === 'owner') {
+      if (user.role === 'admin') {
+        navigate('/admin');
+      } else if (user.role === 'owner') {
         navigate('/owner');
       } else {
         navigate('/');
       }
-    } catch (error) {
-      toast.error('Login failed.');
+    } catch (error: any) {
+      if (error.code === 'auth/popup-closed-by-user') {
+        toast.info('Login cancelled. Please keep the window open to sign in.');
+      } else if (error.code === 'auth/popup-blocked') {
+        toast.error('Login popup was blocked. Please allow popups for this site.');
+      } else {
+        toast.error('Login failed. Please try again.');
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -36,49 +45,22 @@ export default function Login() {
       >
         <div className="text-center">
           <h1 className="text-3xl font-bold text-neutral-900">{t('login')}</h1>
-          <p className="mt-2 text-neutral-500">Welcome back to Qareeb</p>
+          <p className="mt-2 text-neutral-500">Welcome to Qareeb</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-          <div className="space-y-4">
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-neutral-400" />
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Email Address"
-                className="w-full rounded-2xl border border-neutral-200 bg-neutral-50 py-4 pl-12 pr-4 text-sm focus:border-primary-500 focus:outline-none"
-              />
-            </div>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-neutral-400" />
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                className="w-full rounded-2xl border border-neutral-200 bg-neutral-50 py-4 pl-12 pr-4 text-sm focus:border-primary-500 focus:outline-none"
-              />
-            </div>
-          </div>
-
+        <div className="mt-8 space-y-6">
           <button
-            type="submit"
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary-600 py-4 font-bold text-white transition-colors hover:bg-primary-700"
+            onClick={handleGoogleLogin}
+            disabled={isLoading}
+            className="flex w-full items-center justify-center gap-3 rounded-2xl border border-neutral-200 bg-white py-4 font-bold text-neutral-700 transition-all hover:bg-neutral-50 active:scale-[0.98] disabled:opacity-50"
           >
-            {t('login')}
-            <ArrowRight className="h-5 w-5" />
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="h-6 w-6" />
+            {isLoading ? 'Connecting...' : 'Continue with Google'}
           </button>
-        </form>
+        </div>
 
-        <p className="mt-8 text-center text-sm text-neutral-500">
-          Don't have an account?{' '}
-          <Link to="/register" className="font-bold text-primary-600 hover:underline">
-            {t('register')}
-          </Link>
+        <p className="mt-8 text-center text-xs text-neutral-400">
+          By continuing, you agree to our Terms of Service and Privacy Policy.
         </p>
       </motion.div>
     </div>

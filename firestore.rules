@@ -1,0 +1,216 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: shops
+// Document ID: {shopId}
+// Fields:
+//   - ownerId: string (required)
+//   - name: string (required, 1-100 chars)
+//   - description: string (optional, max 1000 chars)
+//   - category: string (required)
+//   - isOpen: bool
+//   - location: map {lat: number, lng: number, address: string}
+//   - rating: number
+//   - reviewCount: number
+//   - viewsCount: number
+//   - images: list of strings (max 5)
+//   - createdAt: timestamp
+//
+// Collection: shops/{shopId}/reviews
+// Document ID: {reviewId}
+// Fields:
+//   - shopId: string (required)
+//   - userId: string (required)
+//   - userName: string (required)
+//   - rating: number (1-5)
+//   - comment: string (max 500 chars)
+//   - createdAt: timestamp
+//
+// Collection: users
+// Document ID: {userId}
+// Fields:
+//   - uid: string (required)
+//   - email: string (required)
+//   - displayName: string
+//   - role: string (user, owner, admin)
+//
+// Collection: chats
+// Document ID: {chatId}
+// Fields:
+//   - participants: list of strings (uids)
+//   - shopId: string
+//   - lastMessage: string
+//   - updatedAt: timestamp
+//
+// Collection: chats/{chatId}/messages
+// Document ID: {messageId}
+// Fields:
+//   - chatId: string
+//   - senderId: string
+//   - text: string
+//   - createdAt: timestamp
+//
+// ===============================================================
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // 0. Global Safety Net
+    // ===============================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ===============================================================
+    // Helper Functions (The Primitives)
+    // ===============================================================
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    function incoming() {
+      return request.resource.data;
+    }
+    
+    function existing() {
+      return resource.data;
+    }
+
+    function isAdmin() {
+      // Use hardcoded admin for bootstrap, or check user doc for role
+      // Note: get() can be expensive on list queries, but for single doc it's okay
+      return isSignedIn() && (
+        request.auth.token.email == "hatim14995@gmail.com" && 
+        request.auth.token.email_verified == true
+      );
+    }
+
+    // ===============================================================
+    // Validation Blueprints (Schema Guards)
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.uid == request.auth.uid &&
+             data.email is string && data.email.size() <= 256 &&
+             data.displayName is string && data.displayName.size() <= 100;
+    }
+
+    function isValidShop(data) {
+      return data.keys().hasAll(['ownerId', 'name', 'category', 'location']) &&
+             data.ownerId is string && data.ownerId.size() <= 128 &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             data.category is string && data.category.size() <= 50 &&
+             data.location is map &&
+             data.location.address is string && data.location.address.size() <= 500 &&
+             data.location.lat is number && data.location.lng is number;
+    }
+
+    function isValidReview(data) {
+      return data.keys().hasAll(['shopId', 'userId', 'rating', 'userName']) &&
+             data.shopId is string && data.shopId.size() <= 128 &&
+             data.userId == request.auth.uid &&
+             data.userName is string && data.userName.size() <= 100 &&
+             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             (data.comment == null || (data.comment is string && data.comment.size() <= 500));
+    }
+
+    function isValidChat(data) {
+      return data.participants is list && data.participants.size() == 2 &&
+             (request.auth.uid == data.participants[0] || request.auth.uid == data.participants[1]) &&
+             data.shopId is string && data.shopId.size() <= 128;
+    }
+
+    function isValidMessage(data) {
+      return data.chatId is string && data.senderId == request.auth.uid &&
+             data.text is string && data.text.size() <= 1000;
+    }
+
+    // ===============================================================
+    // 1. Users Collection
+    // ===============================================================
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if isOwner(userId) && isValidUser(incoming()) && 
+                    incoming().diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'role']);
+    }
+
+    // ===============================================================
+    // 2. Shops Collection
+    // ===============================================================
+    match /shops/{shopId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidShop(incoming()) && incoming().ownerId == request.auth.uid;
+      
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        // Action: Owner Update
+        (resource.data.ownerId == request.auth.uid && isValidShop(incoming()) && 
+         incoming().ownerId == resource.data.ownerId &&
+         incoming().diff(resource.data).affectedKeys().hasOnly(['name', 'description', 'category', 'isOpen', 'location', 'businessHours', 'images'])) ||
+        // Action: Increment Views (Anyone can do this)
+        (incoming().diff(resource.data).affectedKeys().hasOnly(['viewsCount']) && 
+         incoming().viewsCount == resource.data.viewsCount + 1) ||
+        // Action: Increment Review Count (Triggered by adding review)
+        (incoming().diff(resource.data).affectedKeys().hasOnly(['reviewCount']) && 
+         incoming().reviewCount == resource.data.reviewCount + 1)
+      );
+      
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.ownerId == request.auth.uid);
+
+      // ===============================================================
+      // 3. Reviews Subcollection
+      // ===============================================================
+      match /reviews/{reviewId} {
+        allow read: if true;
+        allow create: if isSignedIn() && isValidReview(incoming()) && 
+                      incoming().shopId == shopId &&
+                      // Requirement 7: Atomicity Guarantee (Enforce that shop also exists)
+                      exists(/databases/$(database)/documents/shops/$(shopId));
+        allow update, delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      }
+    }
+
+    // ===============================================================
+    // 4. Chats Collection
+    // ===============================================================
+    match /chats/{chatId} {
+      allow read: if isSignedIn() && (
+        isAdmin() || 
+        request.auth.uid in resource.data.participants
+      );
+      allow create: if isSignedIn() && isValidChat(incoming());
+      allow update: if isSignedIn() && request.auth.uid in resource.data.participants &&
+                    (
+                      // Action: Update last message
+                      (incoming().diff(resource.data).affectedKeys().hasOnly(['lastMessage', 'updatedAt']))
+                    );
+      
+      // ===============================================================
+      // 5. Messages Subcollection
+      // ===============================================================
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && (
+          isAdmin() ||
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
+        );
+        allow create: if isSignedIn() && isValidMessage(incoming()) && 
+                      request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+      }
+    }
+  }
+}

@@ -3,40 +3,33 @@ import { useTranslation } from 'react-i18next';
 import { MessageSquare, User, ChevronRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '@/src/lib/utils';
-import { mockChatService } from '@/src/services/chatService';
-import { mockShopService } from '@/src/services/shopService';
-import { authService } from '@/src/services/authService';
+import { chatService } from '@/src/services/chatService';
+import { shopService } from '@/src/services/shopService';
+import { useAuth } from '@/src/context/AuthContext';
 import ChatContainer from '@/src/components/ChatContainer';
 import { Chat, Shop } from '@/src/types';
 
 export default function ChatList() {
   const { t } = useTranslation();
+  const { user: currentUser } = useAuth();
   const [chats, setChats] = useState<(Chat & { displayName: string, shopObj?: Shop })[]>([]);
   const [selectedChat, setSelectedChat] = useState<{ shop?: Shop, chatId: string, recipientName: string } | null>(null);
-  
-  // Use useMemo to prevent re-triggering effects if the user object is technically "new" but data is same
-  const currentUser = React.useMemo(() => authService.getCurrentUser(), []);
 
   useEffect(() => {
-    let isMounted = true;
-    let interval: NodeJS.Timeout;
+    if (!currentUser) return;
 
-    const fetchChats = async () => {
-      if (!currentUser) return;
-
+    const unsubscribe = chatService.onChatsChange(currentUser.uid, async (chatData) => {
       try {
-        const chatData = await mockChatService.getChats(currentUser.uid);
-        const shops = await mockShopService.getShops();
-        const users = authService.getRegisteredUsers();
+        const shops = await shopService.getShops();
         
         const enrichedChats = chatData.map(chat => {
           const shop = shops.find(s => s.id === chat.shopId);
           
           let displayName = '';
           if (currentUser.role === 'owner') {
-            const customerId = chat.participants.find(p => p !== currentUser.uid);
-            const customer = users.find(u => u.uid === customerId);
-            displayName = customer?.displayName || 'Customer';
+            // In a real app we'd fetch the user's name from their profile
+            // For now, let's use a placeholder if we don't store it in the chat
+            displayName = 'Customer';
           } else {
             displayName = shop?.name || 'Unknown Shop';
           }
@@ -46,30 +39,16 @@ export default function ChatList() {
             displayName,
             shopObj: shop
           };
-        }).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+        });
         
-        if (isMounted) {
-          setChats(prev => {
-            // Only update if data changed to prevent unnecessary re-renders
-            if (JSON.stringify(prev) !== JSON.stringify(enrichedChats)) {
-              return enrichedChats;
-            }
-            return prev;
-          });
-        }
+        setChats(enrichedChats);
       } catch (error) {
-        console.error('Failed to fetch chats:', error);
+        console.error('Failed to fetch enriched chats:', error);
       }
-    };
+    });
 
-    fetchChats();
-    interval = setInterval(fetchChats, 5000); // Poll every 5 seconds for list updates
-
-    return () => { 
-      isMounted = false; 
-      if (interval) clearInterval(interval);
-    };
-  }, [currentUser?.uid]); // Use uid as dependency for stability
+    return () => unsubscribe();
+  }, [currentUser?.uid]);
 
   if (!currentUser) return null;
 

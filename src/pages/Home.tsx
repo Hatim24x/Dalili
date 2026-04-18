@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Map as MapIcon, List as ListIcon } from 'lucide-react';
+import { Map as MapIcon, List as ListIcon, MapPin } from 'lucide-react';
 import SearchBar from '@/src/components/SearchBar';
 import CategoryFilter from '@/src/components/CategoryFilter';
 import ShopList from '@/src/components/ShopList';
@@ -8,67 +8,115 @@ import MapComponent from '@/src/components/MapComponent';
 import ShopDetails from '@/src/components/ShopDetails';
 import ChatContainer from '@/src/components/ChatContainer';
 import { Shop, UserProfile, Review } from '@/src/types';
-import { mockShopService } from '@/src/services/shopService';
-import { authService } from '@/src/services/authService';
+import { shopService } from '@/src/services/shopService';
+import { useAuth } from '@/src/context/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { Star } from 'lucide-react';
 import ReviewList from '@/src/components/ReviewList';
 
-// Remove MOCK_USER
+import { useGeolocation } from '@/src/hooks/useGeolocation';
+import { calculateDistance } from '@/src/lib/utils';
 
 export default function Home() {
   const { t } = useTranslation();
-  const currentUser = authService.getCurrentUser();
+  const { user: currentUser } = useAuth();
+  const { location: userLocation, requestLocation } = useGeolocation();
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedShop, setSelectedShop] = useState<Shop | null>(null);
   const [chatShop, setChatShop] = useState<Shop | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
-  const [favorites, setFavorites] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    const stored = localStorage.getItem('qareeb_favorites');
+    return stored ? JSON.parse(stored) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('qareeb_favorites', JSON.stringify(favorites));
+  }, [favorites]);
   const [shops, setShops] = useState<Shop[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [newReviewText, setNewReviewText] = useState('');
   const [newReviewRating, setNewReviewRating] = useState(5);
+  const [mapCenter, setMapCenter] = useState<[number, number]>([31.8491, 47.1456]);
 
   useEffect(() => {
     const fetchShops = async () => {
-      const data = await mockShopService.getNearbyShops(0, 0);
-      setShops(data);
+      setIsLoading(true);
+      try {
+        const data = await shopService.getNearbyShops(0, 0);
+        setShops(data);
+      } catch (error) {
+        toast.error('Failed to load shops');
+      } finally {
+        setIsLoading(false);
+      }
     };
     fetchShops();
   }, []);
 
   useEffect(() => {
+    if (userLocation) {
+      setMapCenter([userLocation.lat, userLocation.lng]);
+    }
+  }, [userLocation]);
+
+  useEffect(() => {
     if (selectedShop) {
-      mockShopService.getShopReviews(selectedShop.id).then(setReviews);
+      shopService.getShopReviews(selectedShop.id).then(setReviews);
     }
   }, [selectedShop]);
 
-  const filteredShops = shops.filter(shop => {
-    const matchesSearch = shop.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         shop.category.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || shop.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const sortedShops = React.useMemo(() => {
+    const filtered = shops.filter(shop => {
+      const matchesSearch = shop.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                           shop.category.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedCategory === 'all' || shop.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+
+    if (viewMode === 'map' && userLocation) {
+      return [...filtered].sort((a, b) => {
+        const distA = calculateDistance(userLocation.lat, userLocation.lng, a.location.lat, a.location.lng);
+        const distB = calculateDistance(userLocation.lat, userLocation.lng, b.location.lat, b.location.lng);
+        return distA - distB;
+      });
+    }
+
+    return filtered;
+  }, [shops, searchQuery, selectedCategory, userLocation, viewMode]);
 
   const handleAddReview = async () => {
-    if (!selectedShop || !newReviewText.trim()) return;
-    const review = await mockShopService.addReview({
-      shopId: selectedShop.id,
-      comment: newReviewText,
-      rating: newReviewRating
-    });
-    setReviews(prev => [review, ...prev]);
-    setNewReviewText('');
-    toast.success('Review posted successfully!');
+    if (!selectedShop || !newReviewText.trim() || !currentUser) return;
+    try {
+      const review = await shopService.addReview({
+        shopId: selectedShop.id,
+        userId: currentUser.uid,
+        userName: currentUser.displayName || 'Anonymous',
+        comment: newReviewText,
+        rating: newReviewRating
+      });
+      setReviews(prev => [review, ...prev]);
+      setNewReviewText('');
+      toast.success('Review posted successfully!');
+    } catch (error) {
+      toast.error('Failed to post review');
+    }
   };
 
   const toggleFavorite = (id: string) => {
-    setFavorites(prev => 
-      prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]
-    );
+    setFavorites(prev => {
+      const newFavs = prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id];
+      if (newFavs.includes(id)) {
+        toast.success('Added to favorites');
+      } else {
+        toast.info('Removed from favorites');
+      }
+      return newFavs;
+    });
   };
 
   return (
@@ -121,17 +169,45 @@ export default function Home() {
               exit={{ opacity: 0 }}
               className="space-y-8"
             >
-              <MapComponent 
-                shops={filteredShops} 
-                onShopClick={setSelectedShop}
-              />
+              <div className="relative">
+                <MapComponent 
+                  shops={sortedShops} 
+                  onShopClick={(shop) => {
+                    setSelectedShop(shop);
+                    shopService.incrementViews(shop.id);
+                  }}
+                  center={mapCenter}
+                  userLocation={userLocation}
+                />
+                {userLocation && (
+                  <button 
+                    onClick={() => setMapCenter([userLocation.lat, userLocation.lng])}
+                    className="absolute bottom-6 right-6 z-[1000] flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-xl text-primary-600 hover:bg-neutral-50"
+                    title="Center on my location"
+                  >
+                    <MapPin className="h-6 w-6" />
+                  </button>
+                )}
+              </div>
               
-              <ShopList 
-                shops={filteredShops}
-                favorites={favorites}
-                onToggleFavorite={toggleFavorite}
-                onShopClick={setSelectedShop}
-              />
+              <div className="mt-8">
+                {isLoading ? (
+                  <div className="flex justify-center py-12">
+                    <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-600 border-t-transparent" />
+                  </div>
+                ) : (
+                  <ShopList 
+                    shops={sortedShops}
+                    favorites={favorites}
+                    onToggleFavorite={toggleFavorite}
+                    onShopClick={(shop) => {
+                      setSelectedShop(shop);
+                      shopService.incrementViews(shop.id);
+                    }}
+                    userLocation={userLocation}
+                  />
+                )}
+              </div>
             </motion.div>
           ) : (
             <motion.div
@@ -141,10 +217,14 @@ export default function Home() {
               exit={{ opacity: 0 }}
             >
               <ShopList 
-                shops={filteredShops}
+                shops={sortedShops}
                 favorites={favorites}
                 onToggleFavorite={toggleFavorite}
-                onShopClick={setSelectedShop}
+                onShopClick={(shop) => {
+                  setSelectedShop(shop);
+                  shopService.incrementViews(shop.id);
+                }}
+                userLocation={userLocation}
               />
             </motion.div>
           )}

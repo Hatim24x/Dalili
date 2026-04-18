@@ -43,6 +43,7 @@ interface MapComponentProps {
   shops: Shop[];
   center?: [number, number];
   onShopClick?: (shop: Shop) => void;
+  userLocation?: { lat: number, lng: number } | null;
 }
 
 function ChangeView({ center }: { center: [number, number] }) {
@@ -51,7 +52,41 @@ function ChangeView({ center }: { center: [number, number] }) {
   return null;
 }
 
-export default function MapComponent({ shops, center = [24.7136, 46.6753], onShopClick }: MapComponentProps) {
+const userIcon = L.divIcon({
+  className: 'user-location-icon',
+  html: `
+    <div style="position: relative;">
+      <div style="
+        width: 16px;
+        height: 16px;
+        background-color: #3b82f6;
+        border: 2px solid white;
+        border-radius: 50%;
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+      "></div>
+      <div style="
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        background-color: rgba(59, 130, 246, 0.2);
+        border-radius: 50%;
+        top: -12px;
+        left: -12px;
+        animation: pulse 2s infinite;
+      "></div>
+    </div>
+    <style>
+      @keyframes pulse {
+        0% { transform: scale(0.8); opacity: 0.8; }
+        100% { transform: scale(2); opacity: 0; }
+      }
+    </style>
+  `,
+  iconSize: [16, 16],
+  iconAnchor: [8, 8]
+});
+
+export default function MapComponent({ shops, center = [31.8491, 47.1456], onShopClick, userLocation }: MapComponentProps) {
   const { t } = useTranslation();
 
   return (
@@ -67,6 +102,12 @@ export default function MapComponent({ shops, center = [24.7136, 46.6753], onSho
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <ChangeView center={center} />
+        
+        {userLocation && (
+          <Marker position={[userLocation.lat, userLocation.lng]} icon={userIcon}>
+            <Popup>{t('my_location')}</Popup>
+          </Marker>
+        )}
         
         {shops.map((shop) => (
           <Marker 

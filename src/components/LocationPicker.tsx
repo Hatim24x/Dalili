@@ -48,7 +48,7 @@ function MapEvents({ onLocationSelect }: { onLocationSelect: (lat: number, lng: 
 
 export default function LocationPicker({ onLocationSelect, initialLocation }: LocationPickerProps) {
   const [position, setPosition] = useState<{ lat: number, lng: number }>(
-    initialLocation || { lat: 24.7136, lng: 46.6753 } // Default to Riyadh
+    initialLocation || { lat: 31.8491, lng: 47.1456 } // Default to Maysan, Iraq
   );
 
   const handleMapClick = (lat: number, lng: number) => {

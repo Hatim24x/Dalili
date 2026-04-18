@@ -4,6 +4,8 @@ import { Globe, LogOut, User, Map as MapIcon, Heart, MessageSquare, Store } from
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/src/lib/utils';
 import { authService } from '@/src/services/authService';
+import { useAuth } from '@/src/context/AuthContext';
+import { UserProfile } from '@/src/types';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -13,7 +15,7 @@ export default function Layout({ children }: LayoutProps) {
   const { i18n, t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
-  const currentUser = authService.getCurrentUser();
+  const { user: currentUser, loading: authLoading, logout } = useAuth();
 
   const isRtl = i18n.language === 'ar';
 
@@ -27,10 +29,18 @@ export default function Layout({ children }: LayoutProps) {
     i18n.changeLanguage(newLang);
   };
 
-  const handleLogout = () => {
-    authService.logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-neutral-50">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-600 border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-neutral-50 font-sans text-neutral-900">

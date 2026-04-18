@@ -5,7 +5,8 @@ import ShopCard from '@/src/components/ShopCard';
 import ShopDetails from '@/src/components/ShopDetails';
 import { Shop, Review } from '@/src/types';
 import { motion, AnimatePresence } from 'motion/react';
-import { mockShopService } from '@/src/services/shopService';
+import { shopService } from '@/src/services/shopService';
+import { toast } from 'sonner';
 
 export default function Favorites() {
   const { t } = useTranslation();
@@ -16,7 +17,7 @@ export default function Favorites() {
 
   useEffect(() => {
     const fetchShops = async () => {
-      const data = await mockShopService.getNearbyShops(0, 0);
+      const data = await shopService.getNearbyShops(0, 0);
       setShops(data);
       // Load favorites from local storage if needed, or use a default
       const storedFavs = localStorage.getItem('qareeb_favorites');
@@ -27,7 +28,7 @@ export default function Favorites() {
 
   useEffect(() => {
     if (selectedShop) {
-      mockShopService.getShopReviews(selectedShop.id).then(setReviews);
+      shopService.getShopReviews(selectedShop.id).then(setReviews);
     }
   }, [selectedShop]);
 
@@ -37,6 +38,12 @@ export default function Favorites() {
       : [...favorites, id];
     setFavorites(newFavs);
     localStorage.setItem('qareeb_favorites', JSON.stringify(newFavs));
+    
+    if (newFavs.includes(id)) {
+      toast.success('Added to favorites');
+    } else {
+      toast.info('Removed from favorites');
+    }
   };
 
   const favoriteShops = shops.filter(shop => favorites.includes(shop.id));
@@ -78,7 +85,7 @@ export default function Favorites() {
         reviews={reviews}
         onAddReview={async (text, rating) => {
           if (!selectedShop) return;
-          const review = await mockShopService.addReview({
+          const review = await shopService.addReview({
             shopId: selectedShop.id,
             comment: text,
             rating

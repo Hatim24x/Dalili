@@ -1,10 +1,11 @@
-export type UserRole = 'user' | 'owner';
+export type UserRole = 'user' | 'owner' | 'admin';
 
 export interface UserProfile {
   uid: string;
   email: string;
   displayName: string;
   role: UserRole;
+  photoURL?: string;
   favorites?: string[]; // Array of shop IDs
 }
 
@@ -24,6 +25,11 @@ export interface Shop {
   reviewCount: number;
   images: string[];
   createdAt: string;
+  viewsCount?: number;
+  businessHours?: {
+    open: string;
+    close: string;
+  };
 }
 
 export interface Review {
