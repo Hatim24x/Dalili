@@ -27,9 +27,7 @@ export default function ChatList() {
           
           let displayName = '';
           if (currentUser.role === 'owner') {
-            // In a real app we'd fetch the user's name from their profile
-            // For now, let's use a placeholder if we don't store it in the chat
-            displayName = 'Customer';
+            displayName = chat.initiatorName || 'Customer';
           } else {
             displayName = shop?.name || 'Unknown Shop';
           }

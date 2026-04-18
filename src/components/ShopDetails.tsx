@@ -48,11 +48,14 @@ export default function ShopDetails({
     }
     
     try {
-      const chat = await chatService.createChat(user.uid, shop.ownerId, shop.id);
+      const chat = await chatService.createChat(user.uid, shop.ownerId, shop.id, user.displayName);
       onChatClick?.(shop, chat.id);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Start chat error:', error);
-      toast.error('Failed to start chat');
+      const errorMessage = error.message?.includes('insufficient permissions') 
+        ? 'Permission denied. Please log in again.' 
+        : (error.message || 'Failed to start chat');
+      toast.error(errorMessage);
     }
   };
 

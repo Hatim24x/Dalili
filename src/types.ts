@@ -54,6 +54,7 @@ export interface Chat {
   id: string;
   participants: string[]; // [userId, ownerId]
   shopId: string;
+  initiatorName?: string;
   lastMessage?: string;
   updatedAt: string;
 }
